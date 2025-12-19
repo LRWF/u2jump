@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>跳转确认</title>
+	<link rel="stylesheet" type="text/css" href="./css/weui-basic.css" />
+	<link rel="stylesheet" type="text/css" href="./css/weui-form.css" />
+	<link rel="stylesheet" type="text/css" href="./css/weui-btn.css" />
+	<link rel="stylesheet" type="text/css" href="./css/weui-dialog.css" />
+	<script src="./js/zepto.min.js" type="text/javascript" charset="utf-8"></script>
+</head>
+
+<body>
+	<div class="container">
+		<div style="padding: 2rem;">
+			<h1>
+				即将访问
+			</h1>
+			<p style="margin-top:0.25rem;color:var(--weui-FG-1);text-align:left;font-size:1rem;">
+				请先确保链接安全，再继续访问
+			</p>
+		</div>
+
+		<div style="padding: 0 2rem;">
+			<div class="weui-cells">
+				<div class="weui-cell">
+					<div class="weui-cell__bd">
+						<p id="targetUrl"></p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div style="padding: 4rem 2rem;">
+			<a class="weui-btn weui-btn_primary" href="javascript:" id="confirmBtn">确定跳转</a>
+			<a class="weui-btn weui-btn_default" href="javascript:" id="copyBtn">复制链接</a>
+		</div>
+
+		<div class="dialog_box" style="display: none;">
+			<div class="weui-mask"></div>
+			<div class="weui-dialog">
+				<div class="weui-dialog__hd"><strong class="weui-dialog__title"></strong></div>
+				<div class="weui-dialog__bd"></div>
+				<div class="weui-dialog__ft">
+					<a href="javascript:" class="weui-dialog__btn weui-dialog__btn_primary"></a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		function showDialog(title, message, btnText, callback) {
+			const $dialog = $('.dialog_box');
+
+			$dialog.find('.weui-dialog__title').text(title || '');
+			$dialog.find('.weui-dialog__bd').text(message || '');
+
+			const $dialogPrimaryBtn = $dialog.find('.weui-dialog__btn_primary');
+
+			$dialogPrimaryBtn.text(btnText || '');
+
+			$dialogPrimaryBtn.off('click').on('click', function () {
+				$dialog.fadeOut(200);
+				if (typeof callback === 'function') {
+					callback();
+				}
+			});
+
+			$dialog.fadeIn(200);
+		}
+
+		$(function () {
+			$('.dialog_box').on('click', '.weui-mask', function () {
+				$(this).parents('.dialog_box').fadeOut(200);
+			});
+		});
+
+		function base58Decode(str) {
+			const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+			if (!str || typeof str !== 'string') {
+				return null;
+			}
+
+			for (let ch of str) {
+				if (BASE58_ALPHABET.indexOf(ch) === -1) {
+					return null;
+				}
+			}
+
+			let num = BigInt(0);
+			let base = BigInt(58);
+
+			for (let char of str) {
+				const index = BigInt(BASE58_ALPHABET.indexOf(char));
+				num = num * base + index;
+			}
+
+			let bytes = [];
+			while (num > 0) {
+				bytes.push(Number(num % BigInt(256)));
+				num = num / BigInt(256);
+			}
+			bytes = bytes.reverse();
+
+			let decoded;
+			try {
+				decoded = new TextDecoder().decode(new Uint8Array(bytes));
+			} catch {
+				return null;
+			}
+			try {
+				new URL(decoded);
+			} catch {
+				return null;
+			}
+
+			return decoded;
+		}
+
+		function isWeChat() {
+			const ua = navigator.userAgent.toLowerCase();
+			return (ua.indexOf('micromessenger') || ua.indexOf('xweb') || ua.indexOf('mmwebsdk')) !== -1;
+		}
+
+		const params = new URLSearchParams(window.location.search);
+		const encodedUrl = params.get('url') || '';
+
+		const urlEl = document.getElementById('targetUrl');
+		const confirmBtnEl = document.getElementById('confirmBtn');
+		const copyBtnEl = document.getElementById('copyBtn');
+
+		if (!encodedUrl) {
+			urlEl.textContent = '未获取到可访问的链接';
+			confirmBtnEl.classList.add('weui-btn_disabled');
+			copyBtnEl.classList.add('weui-btn_disabled');
+		} else {
+			const decodedUrl = encodedUrl ? base58Decode(encodedUrl) : '';
+
+			if (!decodedUrl) {
+				urlEl.textContent = '链接异常';
+				confirmBtnEl.classList.add('weui-btn_disabled');
+				copyBtnEl.classList.add('weui-btn_disabled');
+			} else {
+				urlEl.textContent = decodedUrl;
+
+				confirmBtnEl.addEventListener('click', () => {
+					if (isWeChat()) {
+						showDialog('提示', '请使用系统浏览器访问', '确认');
+						return;
+					} else {
+						window.location.href = decodedUrl;
+					}
+				});
+				copyBtnEl.addEventListener('click', () => {
+					navigator.clipboard.writeText(decodedUrl)
+						.then(() => {
+							showDialog('成功', '链接已复制到剪贴板', '确认');
+						})
+						.catch(() => {
+							showDialog('失败', '复制失败，请手动复制', '确认');
+						});
+				});
+			}
+		}
+	</script>
+</body>
+
+</html>
